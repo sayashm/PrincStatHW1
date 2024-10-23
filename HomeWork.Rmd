@@ -1,6 +1,10 @@
 ---
-title: "HW1"
+title: "Home Work 1"
+subtitle: "Principles of Statistical Data Analysis"
 output: pdf_document
+author: 
+  - "Jiacheng Shen"
+  - "Sajjad Ayashm"
 date: "2024-10-22"
 ---
 
@@ -8,6 +12,9 @@ date: "2024-10-22"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## Question 1: Data Exploration
+
+In this section, we explore the data using summary statistics and visualizations to understand the distribution of ant abundance and soil moisture.
 
 ```{r task1}
 load("ants.Rdata")
@@ -15,14 +22,22 @@ summary(ants$abundance)
 summary(ants$moisture)
 var(ants$abundance)
 var(ants$moisture)
-
+```
+Visualize the distribution of ant abundance
+```{r}
 hist(ants$abundance, main = "Histogram of Ant Abundance", xlab = "Abundance", ylab = "Frequency")
 boxplot(ants$abundance, main = "Boxplot of Ant Abundance", ylab = "Abundance")
-
+```
+Scatter plot to explore the relationship between moisture and ant abundance
+```{r}
 plot(ants$moisture, ants$abundance, 
      main = "Scatter Plot of Moisture vs Ant Abundance", 
      xlab = "Moisture (%)", ylab = "Ant Abundance")
 ```
+
+## Question 2: Likelihood and Log-Likelihood Functions
+
+### Likelihood Function
 
 To define the likelihood function in R, we use a function that computes the product of probabilities for all observations.
 ```{r task2}
@@ -48,9 +63,13 @@ initial_params <- c(1, 0.1, 0.5)  # Example starting values for beta_0, beta_1, 
 likelihood_value <- likelihood_function(initial_params, ants$abundance, ants$moisture)
 likelihood_value
 ```
-If we use the set of parameters described in the example above, the likelihood value results 0.
+**Note:** If we use the set of parameters described in the example above, the likelihood value results 0.
 One possible reason is that the number is too small to exhibit. That's why we derive the following
 log likelihood function.
+
+### Log-Likelihood Function
+
+The log-likelihood function computes the sum of the log-probabilities instead of multiplying the probabilities directly, providing more numerical stability.
 
 ```{r task2 - log}
 # Define the log-likelihood function
@@ -77,69 +96,16 @@ log_likelihood_value <- log_likelihood(initial_params, ants$abundance, ants$mois
 log_likelihood_value
 ```
 
-Using the same set of parameters, the log likelihood values result -1148, which makes more sense.
+Using the same set of parameters, the log likelihood values result `r log_likelihood_value```, which makes more sense.
 
 
 ## Question 3: Estimating Equation for \(\beta_1\)
 
 We are tasked with deriving the estimating equation for \(\beta_1\), which involves maximizing the log-likelihood function. The maximum likelihood estimate (MLE) is found by solving this equation using numerical optimization.
 
-### Step 1: Define the Log-Likelihood Function
-
-We reuse the log-likelihood function from Question 2, which we will optimize to find \(\beta_1\), \(\beta_0\), and \(\phi\).
-
-```{r log_likelihood_function_second}
-# Define the log-likelihood function
-log_likelihood <- function(params, abundance, moisture) {
-  beta_0 <- params[1]  # The intercept parameter
-  beta_1 <- params[2]  # The coefficient for moisture
-  phi <- params[3]     # The overdispersion parameter
-  
-  # Calculate the mean (mu) for each observation
-  mu <- exp(beta_0 + beta_1 * moisture)
-  
-  # Compute the log-likelihood for each observation
-  log_lik <- sum(
-    lgamma(abundance + 1 / phi) - lgamma(1 / phi) - lgamma(abundance + 1) +
-    (1 / phi) * log(1 / (1 + mu * phi)) +
-    abundance * log(mu * phi / (1 + mu * phi))
-  )
-  
-  return(log_lik)  # Return the log-likelihood
-}
-```
 
 
-## Question 3: Estimating Equation for \(\beta_1\)
-
-We are tasked with deriving the estimating equation for \(\beta_1\), which involves maximizing the log-likelihood function. The maximum likelihood estimate (MLE) is found by solving this equation using numerical optimization.
-
-### Step 1: Define the Log-Likelihood Function
-
-We use the following log-likelihood function for the negative binomial distribution, where the parameters \(\beta_0\), \(\beta_1\), and \(\phi\) need to be estimated.
-
-```{r log_likelihood_function}
-# Define the log-likelihood function
-log_likelihood <- function(params, abundance, moisture) {
-  beta_0 <- params[1]  # Intercept
-  beta_1 <- params[2]  # Coefficient for moisture
-  phi <- params[3]     # Overdispersion parameter
-  
-  # Calculate the mean (mu) for each observation
-  mu <- exp(beta_0 + beta_1 * moisture)
-  
-  # Compute the log-likelihood for each observation
-  log_lik <- sum(
-    lgamma(abundance + 1 / phi) - lgamma(1 / phi) - lgamma(abundance + 1) +
-    (1 / phi) * log(1 / (1 + mu * phi)) +
-    abundance * log(mu * phi / (1 + mu * phi))
-  )
-  
-  return(log_lik)
-}
-```
-
-### Step 2: Negative Log-Likelihood Function
+### Step 1: Negative Log-Likelihood Function
 
 Since the `optim()` function in R minimizes functions, we use the negative log-likelihood function for the optimization process. The negative log-likelihood is simply the negative of the log-likelihood function.
 
@@ -150,7 +116,7 @@ neg_log_likelihood <- function(params) {
 }
 ```
 
-### Step 3: Perform Optimization to Estimate Parameters
+### Step 2: Perform Optimization to Estimate Parameters
 
 We now use the `optim()` function to find the maximum likelihood estimates (MLE) for \(\beta_0\), \(\beta_1\), and \(\phi\). The initial guesses for the parameters are provided, and the optimization is performed using the BFGS method.
 

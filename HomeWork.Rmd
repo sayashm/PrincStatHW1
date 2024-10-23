@@ -1,0 +1,80 @@
+---
+title: "HW1"
+output: pdf_document
+date: "2024-10-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r task1}
+load("ants.Rdata")
+summary(ants$abundance)
+summary(ants$moisture)
+var(ants$abundance)
+var(ants$moisture)
+
+hist(ants$abundance, main = "Histogram of Ant Abundance", xlab = "Abundance", ylab = "Frequency")
+boxplot(ants$abundance, main = "Boxplot of Ant Abundance", ylab = "Abundance")
+
+plot(ants$moisture, ants$abundance, 
+     main = "Scatter Plot of Moisture vs Ant Abundance", 
+     xlab = "Moisture (%)", ylab = "Ant Abundance")
+```
+
+To define the likelihood function in R, we use a function that computes the product of probabilities for all observations.
+```{r task2}
+# Define the likelihood function
+likelihood_function <- function(params, abundance, moisture) {
+  beta_0 <- params[1]  # The intercept parameter
+  beta_1 <- params[2]  # The coefficient for moisture
+  phi <- params[3]     # The overdispersion parameter
+  
+  # Calculate the mean (mu) for each observation
+  mu <- exp(beta_0 + beta_1 * moisture)
+  
+  # Compute the negative binomial likelihood for each observation
+  likelihoods <- dnbinom(abundance, size = 1/phi, mu = mu, log = FALSE)
+  
+  # Calculate the total likelihood by multiplying individual likelihoods
+  total_likelihood <- prod(likelihoods)
+  
+  return(total_likelihood)
+}
+
+initial_params <- c(1, 0.1, 0.5)  # Example starting values for beta_0, beta_1, and phi
+likelihood_value <- likelihood_function(initial_params, ants$abundance, ants$moisture)
+likelihood_value
+```
+If we use the set of parameters described in the example above, the likelihood value results 0.
+One possible reason is that the number is too small to exhibit. That's why we derive the following
+log likelihood function.
+
+```{r task2 - log}
+# Define the log-likelihood function
+log_likelihood <- function(params, abundance, moisture) {
+  beta_0 <- params[1]  # The intercept parameter
+  beta_1 <- params[2]  # The coefficient for moisture
+  phi <- params[3]     # The overdispersion parameter
+  
+  # Calculate the mean (mu) for each observation
+  mu <- exp(beta_0 + beta_1 * moisture)
+  
+  # Compute the log-likelihood for each observation
+  log_lik <- sum(
+    lgamma(abundance + 1 / phi) - lgamma(1 / phi) - lgamma(abundance + 1) +
+    (1 / phi) * log(1 / (1 + mu * phi)) +
+    abundance * log(mu * phi / (1 + mu * phi))
+  )
+  
+  return(log_lik)  # Return the log-likelihood
+}
+
+initial_params <- c(1, 0.1, 0.5)  # Example starting values for beta_0, beta_1, and phi
+log_likelihood_value <- log_likelihood(initial_params, ants$abundance, ants$moisture)
+log_likelihood_value
+```
+
+Using the same set of parameters, the log likelihood values result -1148, which makes more sense.

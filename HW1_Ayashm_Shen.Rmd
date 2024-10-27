@@ -1,0 +1,238 @@
+---
+title: "Home Work 1"
+subtitle: "Principles of Statistical Data Analysis"
+author: 
+  - "Jiacheng Shen"
+  - "Sajjad Ayashm"
+output: bookdown::html_document2
+date: "2024-10-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(kableExtra)
+```
+
+# Data Exploration
+In this section, we explore the data using summary statistics and visualizations to understand the distribution of ant abundance and soil moisture. Table \@ref(tab:ants-data) shows 5 rows of our data.
+
+
+```{r ants-data, echo=FALSE}
+load("ants.RData")
+kable(head(ants), caption = 'Data in ants.RData file') 
+```
+
+## Data Summary:
+Table \@ref(tab:ants-summary) shows the first few rows of the data set.
+
+```{r ants-summary, echo=FALSE}
+# Numerical Summary Statistics
+abundance_summ <- as.vector(summary(ants$abundance))
+moisture_summ <- as.vector(summary(ants$moisture))
+
+# Combine summaries into a single data frame and transpose
+combined_summ <- data.frame(
+  Statistic = names(summary(ants$abundance)),
+  Abundance = abundance_summ,
+  Moisture = moisture_summ
+)
+
+# Transpose the table for horizontal display
+combined_summ_t <- t(combined_summ)
+colnames(combined_summ_t) <- combined_summ$Statistic
+combined_summ_t <- combined_summ_t[-1, ]
+
+# Display transposed summary table with caption
+kable(combined_summ_t, caption = 'Summary of Abundance of Ants and Moisture of Soil')
+```
+
+Additionally, the variance of ant abundance in the sample is **`r format(var(ants$abundance), , scientific = TRUE)`**, and for moisture, it is **`r var(ants$moisture)`**
+
+## Data Visualization
+We visualized the distribution of ant abundance using a histogram (Figure \@ref(fig:hist-abundance)) and boxplot (Figure \@ref(fig:boxplot-abundance)) to identify its spread and any potential outliers. A scatter plot of soil moisture versus ant abundance (Figure \@ref(fig:scatter-plot)) was created to explore their relationship. Additionally, a mean-variance plot (Figure \@ref(fig:mean-variance)) was used to assess overdispersion, which supports the choice of a negative binomial model for this data.
+
+```{r hist-abundance, echo=FALSE, fig.cap="Histogram of Ant Abundance"}
+# Histogram of Abundance
+hist(ants$abundance, main = "Histogram of Ant Abundance", xlab = "Abundance", ylab = "Frequency")
+```
+
+```{r boxplot-abundance, echo=FALSE, fig.cap="Boxplot of Abundance"}
+# Boxplot of Abundance
+boxplot(ants$abundance, main = "Boxplot of Ant Abundance", ylab = "Abundance")
+```
+
+```{r scatter-plot, echo=FALSE, fig.cap="Scatter Plot of Moisture vs Ant Abundance"}
+# Visualize the Data
+plot(ants$moisture, ants$abundance, 
+     main = "Scatter Plot of Moisture vs Ant Abundance", 
+     xlab = "Moisture (%)", ylab = "Ant Abundance")
+```
+```{r mean-variance, echo=FALSE, fig.cap="Mean vs Variance of Ant Abundance"}
+# Examine Mean-Variance Relationship
+mean_abundance <- tapply(ants$abundance, cut(ants$moisture, breaks=5), mean)
+variance_abundance <- tapply(ants$abundance, cut(ants$moisture, breaks=5), var)
+plot(mean_abundance, variance_abundance, 
+     main = "Mean vs Variance of Ant Abundance",
+     xlab = "Mean Abundance", ylab = "Variance")
+
+```
+
+# Likelihood Function
+
+The likelihood function is shown in Equation.
+
+$$ 
+L(\beta_0, \beta_1, \phi) = \prod_{i=1}^n \frac{\Gamma(y_i + 1 / \phi)}{\Gamma(1 / \phi) \, y_i!} \left( \frac{1}{1 + \mu_i \phi} \right)^{1 / \phi} \left( \frac{\mu_i \phi}{1 + \mu_i \phi} \right)^{y_i}
+$$ 
+
+
+## Likelihood Function
+
+To define the likelihood function in R, we use a function that computes the product of probabilities for all observations.
+```{r eval=TRUE}
+# Define the likelihood function
+likelihood_function <- function(params, abundance, moisture) {
+  beta_0 <- params[1]  # The intercept parameter
+  beta_1 <- params[2]  # The coefficient for moisture
+  phi <- params[3]     # The overdispersion parameter
+  
+  # Calculate the mean (mu) for each observation
+  mu <- exp(beta_0 + beta_1 * moisture)
+  
+  # Compute the negative binomial likelihood for each observation
+  likelihoods <- dnbinom(abundance, size = 1/phi, mu = mu, log = FALSE)
+  
+  # Calculate the total likelihood by multiplying individual likelihoods
+  total_likelihood <- prod(likelihoods)
+  
+  return(total_likelihood)
+}
+
+initial_params <- c(1, 0.1, 0.5)  # Example starting values for beta_0, beta_1, and phi
+likelihood_value <- likelihood_function(initial_params, ants$abundance, ants$moisture)
+```
+
+
+**Note:** If we use the set of parameters described in the example above, the likelihood value results `r likelihood_value`. One possible reason is that the number is too small to exhibit. That's why we derive the following log likelihood function.
+
+## Log-Likelihood Function
+
+The log-likelihood function computes the sum of the log-probabilities instead of multiplying the probabilities directly, providing more numerical stability.
+
+```{r task2 - log}
+# Define the log-likelihood function
+log_likelihood <- function(params, abundance, moisture) {
+  beta_0 <- params[1]  # The intercept parameter
+  beta_1 <- params[2]  # The coefficient for moisture
+  phi <- params[3]     # The overdispersion parameter
+  
+  # Calculate the mean (mu) for each observation
+  mu <- exp(beta_0 + beta_1 * moisture)
+  
+  # Compute the log-likelihood for each observation
+  log_lik <- sum(
+    lgamma(abundance + 1 / phi) - lgamma(1 / phi) - lgamma(abundance + 1) +
+    (1 / phi) * log(1 / (1 + mu * phi)) +
+    abundance * log(mu * phi / (1 + mu * phi))
+  )
+  
+  return(log_lik)  # Return the log-likelihood
+}
+
+initial_params <- c(1, 0.1, 0.5)  # Example starting values for beta_0, beta_1, and phi
+log_likelihood_value <- log_likelihood(initial_params, ants$abundance, ants$moisture)
+```
+
+Using the same set of parameters, the log likelihood values result `r log_likelihood_value`, which makes more sense.
+
+**Explanation:**
+Likelihood vs. Log-Likelihood: The likelihood function directly computes the product of individual probabilities, which can lead to underflow when dealing with very small values. The log-likelihood function sums the logarithms of the probabilities, providing greater numerical stability.
+
+
+# Estimating Equation for \(\beta_1\)
+
+Our objective is to derive the estimating equation for \(\beta_1\) by maximizing the log-likelihood function. The maximum likelihood estimate (MLE) for \(\beta_1\) can be obtained by setting the derivative of the log-likelihood with respect to  \(\beta_1\) to zero, which requires numerical optimization.
+
+$$
+\ell(\beta_0, \beta_1, \phi) = \sum_{i=1}^n \left[ \log \left( \Gamma(y_i + \frac{1}{\phi}) \right) - \log \left( \Gamma(\frac{1}{\phi}) \right) - \log(y_i!) + \frac{1}{\phi} \log \left( \frac{1}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right) + y_i \log \left( \frac{\exp(\beta_0 + \beta_1 x_i) \phi}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right) \right]
+$$
+To obtain the estimating equation for the β1 parameter, we differentiate the right side of the 
+
+$$
+\ell(\beta_1) = \sum_{i=1}^n \left[ \frac{1}{\phi} \log \left( \frac{1}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right) + y_i \log \left( \frac{\exp(\beta_0 + \beta_1 x_i) \phi}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right) \right]
+$$
+loglikelihood function with respect to β1. We get the following equation:
+Differentiate both terms and get the following result:
+$$
+\frac{\partial \ell(\beta_1)}{\partial \beta_1} = \sum_{i=1}^n \left[ \frac{x_i \left( y_i - \exp(\beta_0 + \beta_1 x_i) \right)}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right]
+$$
+
+et the result to zero, we get the estimating equation:
+
+$$
+\sum_{i=1}^n \left[ \frac{x_i \left( y_i - \exp(\beta_0 + \beta_1 x_i) \right)}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right] = 0
+$$
+
+
+
+
+## Step 1: Negative Log-Likelihood Function
+
+Since the `optim()` function in R minimizes functions, we use the negative log-likelihood function for the optimization process. The negative log-likelihood is simply the negative of the log-likelihood function.
+
+```{r neg_log_likelihood}
+# Define the negative log-likelihood function for optimization
+neg_log_likelihood <- function(params) {
+  -log_likelihood(params, ants$abundance, ants$moisture)
+}
+```
+
+```{r Q4}
+# Given values
+beta0 <- 2.509067
+phi <- 2.289377
+x_data <- ants$moisture  # Observed soil moisture data
+y_data <- ants$abundance  # Observed ant abundance data
+
+# Define the log-likelihood function in terms of beta1
+log_likelihood <- function(beta1) {
+  mu <- exp(beta0 + beta1 * x_data)
+  sum(dnbinom(y_data, size = 1/phi, mu = mu, log = TRUE))
+}
+
+# Define a range of beta1 values
+beta1_values <- seq(-5, 5, length.out = 100)
+
+# Compute the log-likelihood for each beta1 value
+log_likelihood_values <- sapply(beta1_values, log_likelihood)
+
+# Plot the log-likelihood function
+plot(beta1_values, log_likelihood_values, type = "l", 
+     xlab = expression(beta[1]), 
+     ylab = "Log-Likelihood", 
+     main = "Log-Likelihood as a function of beta1")
+
+```
+
+
+```{r Q5}
+# Optimize to find beta1
+result <- optim(par = 0, fn = log_likelihood, control = list(fnscale = -1), method = "BFGS")
+
+# Extract the estimated beta1
+beta1_estimate <- result$par
+```
+
+```{r Q6}
+# Define the estimating equation function
+estimating_equation <- function(beta1, beta0, phi, x, y) {
+  sum(x * (y - exp(beta0 + beta1 * x)) / (1 + exp(beta0 + beta1 * x) * phi))
+}
+
+# Calculate the value of the estimating equation at beta1_estimate
+result <- estimating_equation(beta1_estimate, beta0, phi, x_data, y_data)
+
+# Print the result
+print(result)
+```

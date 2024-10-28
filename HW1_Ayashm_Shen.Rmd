@@ -1,17 +1,24 @@
 ---
-title: "Home Work 1"
-subtitle: "Principles of Statistical Data Analysis"
-author: 
-  - "Jiacheng Shen"
-  - "Sajjad Ayashm"
-output: bookdown::html_document2
-date: "2024-10-24"
+title: Principles of Statistical Data Analysis
+author:
+- Jiacheng Shen
+- Sajjad Ayashm
+date: "2024-10-28"
+output:
+  bookdown::pdf_document2:
+    toc: false
+header-includes:
+  - \usepackage{float}
+subtitle: Home Work 1
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(knitr)
 library(kableExtra)
+```
+```{r global-options, include=FALSE}
+options(digits = 3) 
 ```
 
 # Data Exploration
@@ -20,31 +27,34 @@ In this section, we explore the data using summary statistics and visualizations
 
 ```{r ants-data, echo=FALSE}
 load("ants.RData")
-kable(head(ants), caption = 'Data in ants.RData file') 
+kable(head(ants), caption = 'Data in ants.RData file')  %>%
+  kable_styling(latex_options = "H")
 ```
 
 ## Data Summary:
 Table \@ref(tab:ants-summary) shows the first few rows of the data set.
 
-```{r ants-summary, echo=FALSE}
+```{r ants-summary, eval=TRUE, echo=FALSE}
 # Numerical Summary Statistics
 abundance_summ <- as.vector(summary(ants$abundance))
 moisture_summ <- as.vector(summary(ants$moisture))
-
 # Combine summaries into a single data frame and transpose
 combined_summ <- data.frame(
   Statistic = names(summary(ants$abundance)),
   Abundance = abundance_summ,
   Moisture = moisture_summ
 )
-
+# Bin moisture levels and calculate mean and variance for each bin
+moisture_bins <- cut(ants$moisture, breaks = 5)
+mean_abundance <- tapply(ants$abundance, moisture_bins, mean)
+variance_abundance <- tapply(ants$abundance, moisture_bins, var)
 # Transpose the table for horizontal display
 combined_summ_t <- t(combined_summ)
 colnames(combined_summ_t) <- combined_summ$Statistic
 combined_summ_t <- combined_summ_t[-1, ]
-
 # Display transposed summary table with caption
-kable(combined_summ_t, caption = 'Summary of Abundance of Ants and Moisture of Soil')
+kable(combined_summ_t, caption = 'Summary of Abundance of Ants and Moisture of Soil') %>%
+  kable_styling(latex_options = "H")
 ```
 
 Additionally, the variance of ant abundance in the sample is **`r format(var(ants$abundance), , scientific = TRUE)`**, and for moisture, it is **`r var(ants$moisture)`**
@@ -52,28 +62,27 @@ Additionally, the variance of ant abundance in the sample is **`r format(var(ant
 ## Data Visualization
 We visualized the distribution of ant abundance using a histogram (Figure \@ref(fig:hist-abundance)) and boxplot (Figure \@ref(fig:boxplot-abundance)) to identify its spread and any potential outliers. A scatter plot of soil moisture versus ant abundance (Figure \@ref(fig:scatter-plot)) was created to explore their relationship. Additionally, a mean-variance plot (Figure \@ref(fig:mean-variance)) was used to assess overdispersion, which supports the choice of a negative binomial model for this data.
 
-```{r hist-abundance, echo=FALSE, fig.cap="Histogram of Ant Abundance"}
+```{r hist-abundance, echo=FALSE, fig.cap="Histogram of Ant Abundance", fig.pos="H", fig.width=5, fig.height=4,}
 # Histogram of Abundance
-hist(ants$abundance, main = "Histogram of Ant Abundance", xlab = "Abundance", ylab = "Frequency")
+hist(ants$abundance, xlab = "Abundance", ylab = "Frequency")
 ```
 
-```{r boxplot-abundance, echo=FALSE, fig.cap="Boxplot of Abundance"}
+```{r boxplot-abundance, echo=FALSE, fig.cap="Boxplot of Abundance", fig.pos="H", fig.width=5, fig.height=4,}
 # Boxplot of Abundance
-boxplot(ants$abundance, main = "Boxplot of Ant Abundance", ylab = "Abundance")
+boxplot(ants$abundance, ylab = "Abundance")
 ```
 
-```{r scatter-plot, echo=FALSE, fig.cap="Scatter Plot of Moisture vs Ant Abundance"}
+```{r scatter-plot, echo=FALSE, fig.cap="Scatter Plot of Moisture vs Ant Abundance", fig.pos="H", fig.width=5, fig.height=4,}
 # Visualize the Data
 plot(ants$moisture, ants$abundance, 
-     main = "Scatter Plot of Moisture vs Ant Abundance", 
      xlab = "Moisture (%)", ylab = "Ant Abundance")
 ```
-```{r mean-variance, echo=FALSE, fig.cap="Mean vs Variance of Ant Abundance"}
+
+```{r mean-variance, echo=FALSE, fig.cap="Mean vs Variance of Ant Abundance", fig.pos="H", fig.width=5, fig.height=4,}
 # Examine Mean-Variance Relationship
 mean_abundance <- tapply(ants$abundance, cut(ants$moisture, breaks=5), mean)
 variance_abundance <- tapply(ants$abundance, cut(ants$moisture, breaks=5), var)
 plot(mean_abundance, variance_abundance, 
-     main = "Mean vs Variance of Ant Abundance",
      xlab = "Mean Abundance", ylab = "Variance")
 
 ```
@@ -90,7 +99,7 @@ $$
 ## Likelihood Function
 
 To define the likelihood function in R, we use a function that computes the product of probabilities for all observations.
-```{r eval=TRUE}
+```{r eval=TRUE,echo=FALSE}
 # Define the likelihood function
 likelihood_function <- function(params, abundance, moisture) {
   beta_0 <- params[1]  # The intercept parameter
@@ -120,7 +129,7 @@ likelihood_value <- likelihood_function(initial_params, ants$abundance, ants$moi
 
 The log-likelihood function computes the sum of the log-probabilities instead of multiplying the probabilities directly, providing more numerical stability.
 
-```{r task2 - log}
+```{r task2 - log, echo=FALSE}
 # Define the log-likelihood function
 log_likelihood <- function(params, abundance, moisture) {
   beta_0 <- params[1]  # The intercept parameter
@@ -154,21 +163,31 @@ Likelihood vs. Log-Likelihood: The likelihood function directly computes the pro
 
 Our objective is to derive the estimating equation for \(\beta_1\) by maximizing the log-likelihood function. The maximum likelihood estimate (MLE) for \(\beta_1\) can be obtained by setting the derivative of the log-likelihood with respect to  \(\beta_1\) to zero, which requires numerical optimization.
 
+
+The log-likelihood function is given by:
+
 $$
-\ell(\beta_0, \beta_1, \phi) = \sum_{i=1}^n \left[ \log \left( \Gamma(y_i + \frac{1}{\phi}) \right) - \log \left( \Gamma(\frac{1}{\phi}) \right) - \log(y_i!) + \frac{1}{\phi} \log \left( \frac{1}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right) + y_i \log \left( \frac{\exp(\beta_0 + \beta_1 x_i) \phi}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right) \right]
+\ell(\beta_0, \beta_1, \phi) = \sum_{i=1}^n \Bigg[ \log \left( \Gamma(y_i + \frac{1}{\phi}) \right) 
+- \log \left( \Gamma(\frac{1}{\phi}) \right) - \log(y_i!) \\
++ \frac{1}{\phi} \log \left( \frac{1}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right) 
++ y_i \log \left( \frac{\exp(\beta_0 + \beta_1 x_i) \phi}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right) 
+\Bigg]
 $$
-To obtain the estimating equation for the β1 parameter, we differentiate the right side of the 
+
+
+
+To find the estimating equation for \(\beta_1\), we differentiate this log-likelihood with respect to \(\beta_1\):
 
 $$
 \ell(\beta_1) = \sum_{i=1}^n \left[ \frac{1}{\phi} \log \left( \frac{1}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right) + y_i \log \left( \frac{\exp(\beta_0 + \beta_1 x_i) \phi}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right) \right]
 $$
-loglikelihood function with respect to β1. We get the following equation:
-Differentiate both terms and get the following result:
+
+Differentiating both terms with respect to \(\beta_1\) yields:
 $$
 \frac{\partial \ell(\beta_1)}{\partial \beta_1} = \sum_{i=1}^n \left[ \frac{x_i \left( y_i - \exp(\beta_0 + \beta_1 x_i) \right)}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right]
 $$
 
-et the result to zero, we get the estimating equation:
+Setting this result equal to zero gives the estimating equation:
 
 $$
 \sum_{i=1}^n \left[ \frac{x_i \left( y_i - \exp(\beta_0 + \beta_1 x_i) \right)}{1 + \exp(\beta_0 + \beta_1 x_i) \phi} \right] = 0
@@ -181,14 +200,60 @@ $$
 
 Since the `optim()` function in R minimizes functions, we use the negative log-likelihood function for the optimization process. The negative log-likelihood is simply the negative of the log-likelihood function.
 
-```{r neg_log_likelihood}
+```{r neg_log_likelihood,  echo=FALSE}
 # Define the negative log-likelihood function for optimization
 neg_log_likelihood <- function(params) {
   -log_likelihood(params, ants$abundance, ants$moisture)
 }
 ```
 
-```{r Q4}
+## Step 2: Perform Optimization to Estimate Parameters
+
+We now use the `optim()` function to find the maximum likelihood estimates (MLE) for \(\beta_0\), \(\beta_1\), and \(\phi\). The initial guesses for the parameters are provided, and the optimization is performed using the BFGS method.
+
+```{r optimization, echo=FALSE, warning = FALSE}
+# Define the negative log-likelihood function as a closure, referencing ants data directly
+neg_log_likelihood <- function(params) {
+  beta_0 <- params[1]  # The intercept parameter
+  beta_1 <- params[2]  # The coefficient for moisture
+  phi <- params[3]     # The overdispersion parameter
+  
+  # Calculate the mean (mu) for each observation
+  mu <- exp(beta_0 + beta_1 * ants$moisture)
+  
+  # Compute the log-likelihood for each observation
+  log_lik <- sum(
+    lgamma(ants$abundance + 1 / phi) - lgamma(1 / phi) - lgamma(ants$abundance + 1) +
+    (1 / phi) * log(1 / (1 + mu * phi)) +
+    ants$abundance * log(mu * phi / (1 + mu * phi))
+  )
+  
+  return(-log_lik)  # Return the negative log-likelihood for optimization
+}
+
+# Initial parameter guesses: beta_0 = 1, beta_1 = 0.1, phi = 0.5
+initial_params <- c(1, 0.1, 0.5)
+
+# Perform optimization to estimate beta_0, beta_1, and phi
+optim_result <- optim(initial_params, neg_log_likelihood, method = "BFGS")
+
+# Extract the estimated parameters
+estimated_params <- optim_result$par
+
+# Assign the estimates to beta_0_hat, beta_1_hat, and phi_hat
+beta_0_hat <- estimated_params[1]
+beta_1_hat <- estimated_params[2]
+phi_hat <- estimated_params[3]
+
+```
+
+The estimated parameters provide insights into the relationship between soil moisture and ant abundance. The intercept (\(\beta_0\)) is `r beta_0_hat`, representing baseline abundance, while the coefficient for moisture (\(\beta_1\)) at `r beta_1_hat` shows the effect of soil moisture. The overdispersion parameter (\(\phi\)) at `r phi_hat` captures additional variability in the data.
+
+# Log-Likelihood Optimization with Respect to \(\beta_1\)
+
+In this question, we explore the relationship between \(\beta_1\) and the log-likelihood function, given the parameter estimates for \(\beta_0\) and \(\phi\). Our objective is to visualize how changes in \(\beta_1\) affect the log-likelihood, helping us understand its influence on the model.
+
+```{r eval=TRUE, echo=FALSE}
 # Given values
 beta0 <- 2.509067
 phi <- 2.289377
@@ -206,25 +271,36 @@ beta1_values <- seq(-5, 5, length.out = 100)
 
 # Compute the log-likelihood for each beta1 value
 log_likelihood_values <- sapply(beta1_values, log_likelihood)
+```
 
+In the Figure \@ref(fig:log-likelihood) above, we observe the log-likelihood values across a range of \(\beta_1\) values. The peak of this curve indicates the value of that maximizes the log-likelihood, corresponding to the most likely estimate of\(\beta_1\) given the data. This visualization aids in understanding how sensitive the model’s fit is to changes in \(\beta_1\).
+
+```{r log-likelihood,echo=FALSE, fig.cap="Log likelihood as a function of beta 1", fig.pos="H", fig.width=5, fig.height=4}
 # Plot the log-likelihood function
 plot(beta1_values, log_likelihood_values, type = "l", 
      xlab = expression(beta[1]), 
      ylab = "Log-Likelihood", 
-     main = "Log-Likelihood as a function of beta1")
+)
 
 ```
 
+# Estimating the Optimal Value of \(\beta_1\)
+To estimate the optimal value of \(\beta_1\) that maximizes the log-likelihood, we use the `optim()` function in R with the BFGS optimization method:
 
-```{r Q5}
+```{r, echo=FALSE} 
 # Optimize to find beta1
 result <- optim(par = 0, fn = log_likelihood, control = list(fnscale = -1), method = "BFGS")
 
 # Extract the estimated beta1
 beta1_estimate <- result$par
 ```
+The estimated value of \(\beta_1\) is `r beta1_estimate`, which provides the most likely parameter value based on the observed data and model assumptions.
 
-```{r Q6}
+# Evaluating the Estimating Equation at \(\beta_1\)
+
+To verify the estimated \(\beta_1\) value from Question 5, we compute the estimating equation at \(\beta_1\) to see if it approximates zero, as expected for a maximum likelihood estimate.
+
+```{r, echo=FALSE}
 # Define the estimating equation function
 estimating_equation <- function(beta1, beta0, phi, x, y) {
   sum(x * (y - exp(beta0 + beta1 * x)) / (1 + exp(beta0 + beta1 * x) * phi))
@@ -232,7 +308,44 @@ estimating_equation <- function(beta1, beta0, phi, x, y) {
 
 # Calculate the value of the estimating equation at beta1_estimate
 result <- estimating_equation(beta1_estimate, beta0, phi, x_data, y_data)
-
-# Print the result
-print(result)
 ```
+
+The resulting value of the estimating equation is **`r result`**. A result close to zero suggests that \(\beta_1\) is indeed an optimal estimate, indicating that the observed data align well with the expected values under the model.
+
+# Visualizing the Mean-Variance Relationship
+
+In this question, we use the estimated parameters to visualize the mean-variance relationship of predicted ant abundance and compare it to the observed data from Question 1.
+
+## Step 1: Calculating Predicted Mean and Variance
+Using the model’s estimated parameters, we calculate the predicted mean and variance of ant abundance for each soil moisture observation.
+
+```{r, echo=FALSE}
+# Estimated parameters from optimization
+beta0 <- beta_0_hat
+beta1 <- beta_1_hat
+phi <- phi_hat
+
+# Calculate the predicted mean (mu) and corresponding variance
+predicted_mean <- exp(beta0 + beta1 * x_data) # Predicted mean for ant abundance
+predicted_variance <- predicted_mean + (predicted_mean^2) * phi
+```
+
+## Step 2: Plotting the Predicted Mean-Variance Relationship
+We plot the predicted mean against the predicted variance to visualize the model's mean-variance relationship for ant abundance.
+
+## Step 3: Comparing with Observed Data
+To evaluate the model fit, we overlay the actual mean-variance relationship from the observed data (calculated in Question 1) on the same plot. (Figure \@ref(fig:mean-var-relation2))
+
+```{r mean-var-relation2, fig.cap="Mean-Variance Relationship of Predicted Ant Abundance", fig.pos="H", fig.width=5, fig.height=4,, eval=TRUE, echo=FALSE}
+# Plot the Predicted Mean vs. Predicted Variance
+plot(predicted_mean, predicted_variance, 
+     xlab = "Predicted Mean of Ant Abundance",
+     ylab = "Predicted Variance of Ant Abundance",
+     pch = 16, col = "blue")
+# Assuming mean_abundance and variance_abundance were computed in Question 1
+points(mean_abundance, variance_abundance, pch = 1, col = "red")
+legend("topright", legend = c("Predicted", "Actual"), pch = c(16, 1), col = c("blue", "red"))
+```
+
+## Interpretation
+The plot shows the relationship between the mean and variance of the predicted abundance (in blue) and the actual observed data (in red). If the predicted values closely match the observed data, this suggests that the model’s mean-variance relationship aligns well with the data, supporting the negative binomial model’s appropriateness.
